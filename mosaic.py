@@ -8,10 +8,11 @@ TILE_SIZE      = 50     # height/width of mosaic tiles in pixels
 TILE_MATCH_RES = 5      # tile matching resolution (higher values give better fit but require more processing)
 ENLARGEMENT    = 8      # the mosaic image will be this many times wider and taller than the original
 
-TILE_BLOCK_SIZE = TILE_SIZE / max(min(TILE_MATCH_RES, TILE_SIZE), 1)
+TILE_BLOCK_SIZE = int(TILE_SIZE / max(min(TILE_MATCH_RES, TILE_SIZE), 1))
 WORKER_COUNT = max(cpu_count() - 1, 1)
 OUT_FILE = 'mosaic.jpeg'
 EOQ_VALUE = None
+
 
 class TileProcessor:
     def __init__(self, tiles_directory):
@@ -29,7 +30,7 @@ class TileProcessor:
             img = img.crop((w_crop, h_crop, w - w_crop, h - h_crop))
 
             large_tile_img = img.resize((TILE_SIZE, TILE_SIZE), Image.ANTIALIAS)
-            small_tile_img = img.resize((TILE_SIZE/TILE_BLOCK_SIZE, TILE_SIZE/TILE_BLOCK_SIZE), Image.ANTIALIAS)
+            small_tile_img = img.resize((int(TILE_SIZE / TILE_BLOCK_SIZE), int(TILE_SIZE / TILE_BLOCK_SIZE)), Image.ANTIALIAS)
 
             return (large_tile_img.convert('RGB'), small_tile_img.convert('RGB'))
         except:
@@ -39,7 +40,7 @@ class TileProcessor:
         large_tiles = []
         small_tiles = []
 
-        print 'Reading tiles from \'%s\'...' % (self.tiles_directory, )
+        print(f"Reading tiles from '{self.tiles_directory}'...")
 
         # search the tiles directory recursively
         for root, subFolders, files in os.walk(self.tiles_directory):
@@ -50,7 +51,7 @@ class TileProcessor:
                     large_tiles.append(large_tile)
                     small_tiles.append(small_tile)
 
-        print 'Processed %s tiles.' % (len(large_tiles),)
+        print(f'Processed {len(large_tiles)} tiles.')
 
         return (large_tiles, small_tiles)
 
@@ -59,7 +60,7 @@ class TargetImage:
         self.image_path = image_path
 
     def get_data(self):
-        print 'Processing main image...'
+        print('Processing main image...')
         img = Image.open(self.image_path)
         w = img.size[0] * ENLARGEMENT
         h = img.size[1] * ENLARGEMENT
@@ -71,13 +72,14 @@ class TargetImage:
         if w_diff or h_diff:
             large_img = large_img.crop((w_diff, h_diff, w - w_diff, h - h_diff))
 
-        small_img = large_img.resize((w/TILE_BLOCK_SIZE, h/TILE_BLOCK_SIZE), Image.ANTIALIAS)
+        small_img = large_img.resize((int(w / TILE_BLOCK_SIZE), int(h / TILE_BLOCK_SIZE)), Image.ANTIALIAS)
 
         image_data = (large_img.convert('RGB'), small_img.convert('RGB'))
 
-        print 'Main image processed.'
+        print('Main image processed.')
 
         return image_data
+
 
 class TileFitter:
     def __init__(self, tiles_data):
@@ -95,7 +97,7 @@ class TileFitter:
 
     def get_best_fit_tile(self, img_data):
         best_fit_tile_index = None
-        min_diff = sys.maxint
+        min_diff = sys.maxsize
         tile_index = 0
 
         # go through each tile in turn looking for the best match for the part of the image represented by 'img_data'
@@ -138,8 +140,8 @@ class ProgressCounter:
 class MosaicImage:
     def __init__(self, original_img):
         self.image = Image.new(original_img.mode, original_img.size)
-        self.x_tile_count = original_img.size[0] / TILE_SIZE
-        self.y_tile_count = original_img.size[1] / TILE_SIZE
+        self.x_tile_count = int(original_img.size[0] / TILE_SIZE)
+        self.y_tile_count = int(original_img.size[1] / TILE_SIZE)
         self.total_tiles  = self.x_tile_count * self.y_tile_count
 
     def add_tile(self, tile_data, coords):
@@ -149,6 +151,7 @@ class MosaicImage:
 
     def save(self, path):
         self.image.save(path)
+
 
 def build_mosaic(result_queue, all_tile_data_large, original_img_large):
     mosaic = MosaicImage(original_img_large)
@@ -170,17 +173,18 @@ def build_mosaic(result_queue, all_tile_data_large, original_img_large):
             pass
 
     mosaic.save(OUT_FILE)
-    print '\nFinished, output is in', OUT_FILE
+    print('\nFinished, output is in', OUT_FILE)
+
 
 def compose(original_img, tiles):
-    print 'Building mosaic, press Ctrl-C to abort...'
+    print('Building mosaic, press Ctrl-C to abort...')
     original_img_large, original_img_small = original_img
     tiles_large, tiles_small = tiles
 
     mosaic = MosaicImage(original_img_large)
 
-    all_tile_data_large = map(lambda tile : list(tile.getdata()), tiles_large)
-    all_tile_data_small = map(lambda tile : list(tile.getdata()), tiles_small)
+    all_tile_data_large = list(map(lambda tile: list(tile.getdata()), tiles_large))
+    all_tile_data_small = list(map(lambda tile: list(tile.getdata()), tiles_small))
 
     work_queue   = Queue(WORKER_COUNT)
     result_queue = Queue()
@@ -202,7 +206,7 @@ def compose(original_img, tiles):
                 progress.update()
 
     except KeyboardInterrupt:
-        print '\nHalting, saving partial image please wait...'
+        print('\nHalting, saving partial image please wait...')
 
     finally:
         # put these special values onto the queue to let the workers know they can terminate
@@ -216,7 +220,7 @@ def mosaic(img_path, tiles_path):
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
-        print 'Usage: %s <image> <tiles directory>\r' % (sys.argv[0],)
+        print(f'Usage: {sys.argv[0]} <image> <tiles directory>\r')
     else:
         mosaic(sys.argv[1], sys.argv[2])
 
